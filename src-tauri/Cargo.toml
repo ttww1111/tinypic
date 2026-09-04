@@ -2,7 +2,7 @@
 name = "tinypic"
 version = "0.1.0"
 edition = "2021"
-description = "小图 / TinyPic — 无参数图片压缩"
+description = "微图 / TinyPic — 无参数图片压缩"
 rust-version = "1.77"
 
 [lib]

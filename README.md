@@ -1,10 +1,10 @@
-# 小图 / TinyPic
+# 微图 / TinyPic
 
 > 无参数图片压缩桌面工具 —— 引擎自动调参到 TinyPNG 级别质量，无需手动质量滑块。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**小图（TinyPic）** 是一款基于 Tauri 2 的轻量桌面图片压缩工具，主打「无感压缩」：
+**微图（TinyPic）** 是一款基于 Tauri 2 的轻量桌面图片压缩工具，主打「无感压缩」：
 拖入或粘贴图片即自动压缩，**不暴露任何质量滑块**，引擎自动把体积压到接近 TinyPNG 的水平。
 
 ## 特性
@@ -50,7 +50,7 @@ cargo tauri build
 
 ## 使用
 
-1. 打开小图，把图片拖入窗口（或点选 / `Ctrl+V` 粘贴）；
+1. 打开微图，把图片拖入窗口（或点选 / `Ctrl+V` 粘贴）；
 2. 引擎自动压缩，列表实时显示「节省 X% · 压缩后 Y」；
 3. 完成后点「打开文件夹」查看结果。
 

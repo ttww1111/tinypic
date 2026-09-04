@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "小图",
+        "title": "微图",
         "width": 520,
         "height": 360,
         "minWidth": 480,
