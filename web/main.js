@@ -5,8 +5,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 
-// GitHub 仓库地址（用户未提供具体 repo，先用占位；替换为真实地址即可）
-const GITHUB_REPO_URL = "https://github.com"; // TODO: 替换为 小图 / TinyPic 的真实仓库地址
+// GitHub 仓库地址
+const GITHUB_REPO_URL = "https://github.com/ttww1111/tinypic";
 
 const $ = (id) => document.getElementById(id);
 const app = $("app"), drop = $("drop"), listEl = $("list"), dropTitle = $("dropTitle");
