@@ -21,7 +21,11 @@ function loadSettings() {
   try { s = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { s = { ...defaults }; }
   return s;
 }
-function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+function saveSettings() {
+  // 宽/高每次重新打开都重置（不同图片尺寸不同），不持久化
+  const { targetWidth, targetHeight, ...rest } = settings;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
+}
 function humanSize(n) { const u = ["B", "KB", "MB", "GB"]; let v = n || 0, i = 0; while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; } return i ? `${v.toFixed(1)} ${u[i]}` : `${Math.round(v)} B`; }
 function showNotice(text) { noticeEl.textContent = text; clearTimeout(showNotice.timer); showNotice.timer = setTimeout(() => noticeEl.textContent = "", 3500); }
 function statusOf(r) { if (r.error) return r.error === "已取消" ? "cancel" : "err"; return r.kept ? "keep" : "ok"; }
@@ -36,13 +40,19 @@ function rowData(f) {
   const { label } = badgeFor(f.format || f.mime);
   const dims = f.width && f.height ? `${f.width}×${f.height}` : "";
   const info = `${humanSize(f.size)}${dims ? " · " + dims : ""}`;
-  let state = "待压缩", cls = "pending";
+  let state = "待压缩", sub = "", cls = "pending";
   if (f.status === "running") { state = "压缩中…"; cls = "run"; }
-  else if (f.status === "ok") { const pct = f.size ? ((1 - f.new / f.size) * 100).toFixed(1) : "0.0"; state = `节省 ${pct}% · 压缩后 ${humanSize(f.new)}`; cls = "ok"; }
+  else if (f.status === "ok") {
+    const pct = f.size ? (1 - f.new / f.size) * 100 : 0;
+    const sign = pct >= 0 ? "-" : "+";
+    state = `${sign}${Math.abs(pct).toFixed(1)}%`;
+    sub = `压缩后 ${humanSize(f.new)}`;
+    cls = "ok";
+  }
   else if (f.status === "keep") { state = "已最优"; cls = "keep"; }
   else if (f.status === "cancel") { state = "已取消，原文件未改动"; cls = "err"; }
   else if (f.status === "err") { state = "失败"; cls = "err"; }
-  return { label, info, state, cls };
+  return { label, info, state, sub, cls };
 }
 function fillRow(row, f) {
   const d = rowData(f);
@@ -60,13 +70,20 @@ function fillRow(row, f) {
   const metaText = row.querySelector(".meta-text");
   if (metaText) metaText.textContent = d.info;
   const state = row.querySelector(".state");
-  if (state) { state.textContent = d.state; state.className = `state ${d.cls}`; state.title = f.error || ""; }
+  if (state) {
+    state.className = `state ${d.cls}`;
+    state.title = f.error || "";
+    const main = state.querySelector(".state-main");
+    const sub = state.querySelector(".state-sub");
+    if (main) main.textContent = d.state;
+    if (sub) { sub.textContent = d.sub || ""; sub.hidden = !d.sub; }
+  }
 }
 function makeRow(path, f) {
   const row = document.createElement("div");
   row.className = "row";
   row.dataset.path = path;
-  row.innerHTML = `<div class="thumb-wrap"><img class="thumb" alt=""><div class="thumb-fallback" hidden></div></div><div class="row-body"><div class="name"></div><div class="meta"><span class="badge badge-other"></span><span class="meta-text"></span></div></div><div class="state"></div>`;
+  row.innerHTML = `<div class="thumb-wrap"><img class="thumb" alt=""><div class="thumb-fallback" hidden></div></div><div class="row-body"><div class="name"></div><div class="meta"><span class="badge badge-other"></span><span class="meta-text"></span></div></div><div class="state"><div class="state-main"></div><div class="state-sub" hidden></div></div>`;
   fillRow(row, f);
   return row;
 }
