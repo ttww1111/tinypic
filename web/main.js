@@ -238,6 +238,7 @@ $("settingsBtn").addEventListener("click", openSettings);
 $("settingsClose").addEventListener("click", closeSettings);
 $("settingsBackdrop").addEventListener("click", closeSettings);
 $("settingsHandle").addEventListener("click", closeSettings);
+$("settingsReset").addEventListener("click", () => { settings = { ...defaults }; syncSettingsUI(); saveSettings(); showNotice("已恢复默认设置"); });
 $("suffix").addEventListener("input", e => { settings.suffix = e.target.value; saveSettings(); });
 document.querySelectorAll("input[name=outputMode]").forEach(x => x.addEventListener("change", e => { settings.outputMode = e.target.value; saveSettings(); updateSuffixState(); }));
 
