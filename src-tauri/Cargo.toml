@@ -1,0 +1,38 @@
+[package]
+name = "tinypic"
+version = "0.1.0"
+edition = "2021"
+description = "小图 / TinyPic — 无参数图片压缩"
+rust-version = "1.77"
+
+[lib]
+name = "tinypic_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+imagequant = "4.4"
+oxipng = "10.2"
+mozjpeg = "0.10"
+webp = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+png = "0.17"
+rayon = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

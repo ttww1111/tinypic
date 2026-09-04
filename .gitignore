@@ -1,0 +1,32 @@
+# Dependencies
+/node_modules/
+
+# Rust build artifacts
+/target/
+/src-tauri/target/
+
+# Frontend build output
+/dist/
+
+# Test outputs
+/tests_out/
+
+# Build leftovers
+*.old
+*.oldb
+*.old2
+*.old3
+*.old4
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# Vite stale temp config
+vite.config.js.timestamp-*.mjs
+
+# Cargo registry cache (if present locally)
+.cargo/

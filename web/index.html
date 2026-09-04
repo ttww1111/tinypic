@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小图</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app" id="app">
+      <header class="topbar">
+        <div class="top-actions">
+          <button type="button" id="settingsBtn" class="icon-btn" aria-label="设置" title="设置">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section id="drop" class="drop" tabindex="0">
+        <div class="drop-inner">
+          <div class="drop-icon">
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 .7.3l3 3a1 1 0 0 1-1.4 1.4L13 6.4V14a1 1 0 1 1-2 0V6.4L9.7 7.7a1 1 0 0 1-1.4-1.4l3-3A1 1 0 0 1 12 3Zm-7 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-16 0 1 1 0 0 1 1-1Z"/></svg>
+          </div>
+          <div class="drop-title" id="dropTitle">拖放图片到此处</div>
+          <div class="drop-hint">或按 Ctrl+V 粘贴 · 支持 PNG / JPEG / WebP</div>
+        </div>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+      <section id="list" class="list" aria-live="polite"></section>
+
+      <section class="outbar" id="outbar" hidden>
+        <button type="button" id="clearBtn" class="text-trigger" aria-label="清空列表">清空列表</button>
+        <button type="button" id="openBtn" class="text-trigger" aria-label="打开文件夹">打开文件夹</button>
+      </section>
+
+      <div class="progress-wrap" id="progressWrap" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText"></div>
+      </div>
+
+      <footer class="footer"><span class="version-tag" id="versionTag">v0.1.0</span></footer>
+    </main>
+
+    <!-- 设置从底部浮出 -->
+    <div id="settingsSheet" class="sheet" hidden>
+      <div class="sheet-backdrop" id="settingsBackdrop"></div>
+      <div class="sheet-card" role="dialog" aria-modal="true">
+        <div class="sheet-handle" id="settingsHandle"><div class="sheet-handle-bar"></div></div>
+        <div class="sheet-head"><button id="settingsClose" class="close-btn" type="button" aria-label="关闭">×</button></div>
+        <div class="sheet-body">
+          <div class="field">
+            <label class="field-label" for="outMode">保存方式</label>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="outputMode" value="ask" checked /><span>每次询问</span></label>
+              <label class="seg-opt"><input type="radio" name="outputMode" value="replace" /><span>替换原文件</span></label>
+              <label class="seg-opt"><input type="radio" name="outputMode" value="new_file" /><span>存为新文件</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="suffix">新文件后缀</label>
+            <div class="field-row">
+              <input id="suffix" class="text-input" value="_tiny" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">调整尺寸</label>
+            <div class="dim-grid">
+              <div class="dim-cell">
+                <label class="dim-label" for="targetWidth">宽度 (px)</label>
+                <input id="targetWidth" class="text-input dim-input" type="number" min="1" inputmode="numeric" />
+              </div>
+              <div class="dim-cell">
+                <label class="dim-label" for="targetHeight">高度 (px)</label>
+                <input id="targetHeight" class="text-input dim-input" type="number" min="1" inputmode="numeric" />
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">保留元数据</label>
+            <div class="checks">
+              <label class="check"><input type="checkbox" id="keepCopyright" /><span>版权信息</span></label>
+              <label class="check"><input type="checkbox" id="keepLocation" /><span>位置信息</span></label>
+              <label class="check"><input type="checkbox" id="keepCreation" /><span>创建日期</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 调整尺寸：点击底部图标浮出 -->
+    <div id="choiceModal" class="modal" hidden>
+      <div class="modal-card small" role="dialog" aria-modal="true" aria-labelledby="choiceTitle">
+        <h2 id="choiceTitle">保存方式</h2>
+        <div class="choice-actions">
+          <button class="btn primary" data-choice="replace">替换原文件</button>
+          <button class="btn ghost" data-choice="new_file">保留新文件</button>
+        </div>
+        <label class="choice-remember"><input type="checkbox" id="choiceRemember" /> 记住选择，下次不再询问</label>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
