@@ -99,9 +99,16 @@ async function hydrate(paths) {
 async function addPaths(paths) {
   if (running) { showNotice("当前有压缩任务进行中，请稍后再添加"); return; }
   const supported = /\.(png|jpe?g|webp)$/i;
-  const valid = [], folders = [];
-  for (const p of paths) { if (supported.test(p)) valid.push(p); else folders.push(p); }
-  if (folders.length) showNotice("不支持文件夹");
+  const valid = [], rejected = [];
+  for (const p of paths) { if (supported.test(p)) valid.push(p); else rejected.push(p); }
+  if (rejected.length) {
+    const folders = rejected.filter(p => /[\\/]$/.test(p) || !/\.[^.\\/]+$/.test(p));
+    const badFiles = rejected.filter(p => !folders.includes(p));
+    const parts = [];
+    if (folders.length) parts.push("暂不支持文件夹");
+    if (badFiles.length) parts.push("仅支持 PNG / JPEG / WebP 格式");
+    showNotice(parts.join("，"));
+  }
   const added = [];
   for (const p of valid) if (!files.has(p)) { const name = p.split(/[\\/]/).pop(); files.set(p, { path: p, name, size: 0, status: "pending", thumbnail: null }); added.push(p); }
   if (added.length) {
