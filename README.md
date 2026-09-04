@@ -26,7 +26,7 @@
 前往 [Releases](https://github.com/ttww1111/tinypic/releases) 下载 Windows 版（v0.1.0）：
 
 - **安装版** `TinyPic_0.1.0_x64-setup.exe`：双击安装，开始菜单 / 卸载程序里可卸载。
-- **绿色免安装版** `TinyPic_0.1.0_x64_portable.zip`：解压出 `微图.exe` 直接双击运行，不写注册表，可放 U 盘 / 任意目录随身携带。
+- **绿色免安装版** `TinyPic_0.1.0_x64_portable.zip`：解压出 `tinypic.exe` 直接双击运行，不写注册表，可放 U 盘 / 任意目录随身携带。
 
 > 运行依赖系统自带的 **WebView2 运行时**（Win10 / 11 绝大多数已预装；若双击没反应，去微软官网装一次 Evergreen WebView2 Runtime 即可，属系统组件、非应用安装）。
 
