@@ -169,6 +169,7 @@ button,input,select { font:inherit; }
 .sheet-handle { display:flex; justify-content:center; padding:4px 0 6px; cursor:pointer; }
 .sheet-handle-bar { width:36px; height:4px; border-radius:99px; background:#d7dbe0; }
 .sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:2px; }
+.sheet-title { font-size:15px; font-weight:700; color:var(--text); }
 .sheet h2 { margin:0; font-size:17px; }
 .sheet-body { padding-bottom:env(safe-area-inset-bottom,0); }
 

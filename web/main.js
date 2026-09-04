@@ -46,7 +46,7 @@ function rowData(f) {
     const pct = f.size ? (1 - f.new / f.size) * 100 : 0;
     const sign = pct >= 0 ? "-" : "+";
     state = `${sign}${Math.abs(pct).toFixed(1)}%`;
-    sub = `压缩后 ${humanSize(f.new)}`;
+    sub = humanSize(f.new);
     cls = "ok";
   }
   else if (f.status === "keep") { state = "已最优"; cls = "keep"; }
@@ -238,7 +238,6 @@ $("settingsBtn").addEventListener("click", openSettings);
 $("settingsClose").addEventListener("click", closeSettings);
 $("settingsBackdrop").addEventListener("click", closeSettings);
 $("settingsHandle").addEventListener("click", closeSettings);
-$("settingsReset").addEventListener("click", () => { settings = { ...defaults }; syncSettingsUI(); saveSettings(); showNotice("已恢复默认设置"); });
 $("suffix").addEventListener("input", e => { settings.suffix = e.target.value; saveSettings(); });
 document.querySelectorAll("input[name=outputMode]").forEach(x => x.addEventListener("change", e => { settings.outputMode = e.target.value; saveSettings(); updateSuffixState(); }));
 
