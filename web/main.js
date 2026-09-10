@@ -12,6 +12,8 @@ const $ = (id) => document.getElementById(id);
 const app = $("app"), drop = $("drop"), listEl = $("list"), dropTitle = $("dropTitle");
 const progressWrap = $("progressWrap"), progressFill = $("progressFill"), progressText = $("progressText"), noticeEl = $("notice");
 const files = new Map();
+// 设置存储：键名永远停在 v1，绝不 bump 版本号（2026-09-10 Tony 反馈：v1→v2 整桶替换
+// 让老用户的所有设置都丢了，以后加新字段只在 defaults 里扩展，靠 loadSettings 合并）
 const SETTINGS_KEY = "tiny.settings.v1";
 const defaults = { outputMode: "ask", suffix: "_tiny", targetWidth: "", targetHeight: "", keepCopyright: false, keepLocation: false, keepCreation: false };
 let settings = loadSettings(), running = false;
@@ -108,7 +110,7 @@ async function hydrate(paths) {
     const batch = paths.slice(i, i + 50);
     try {
       const infos = await invoke("image_infos", { paths: batch });
-      for (const info of infos) { if (files.has(info.path)) { Object.assign(files.get(info.path), info); if (info.width && info.height) setRefDims(info.width, info.height); updateRowEl(info.path); } }
+      for (const info of infos) { if (files.has(info.path)) { Object.assign(files.get(info.path), info); updateRowEl(info.path); } }
     } catch (e) { showNotice(`读取图片信息失败：${e}`); }
   }
   updateSummary();
@@ -168,52 +170,33 @@ document.addEventListener("paste", async e => {
   }
 });
 
-let refDims = null; // 参考图尺寸，用于「设一项自动等比换算另一项」
-function setRefDims(w, h) { if (!refDims && w && h) refDims = { w, h }; }
+function readDim(el) {
+  const v = parseInt(String(el.value).trim(), 10);
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
 function syncSizeUI() {
   const wEl = $("targetWidth"), hEl = $("targetHeight");
   if (!wEl || !hEl) return;
-  wEl.value = settings.targetWidth || "";
-  hEl.value = settings.targetHeight || "";
-  wEl.placeholder = refDims ? String(refDims.w) : "";
-  hEl.placeholder = refDims ? String(refDims.h) : "";
-  syncSizeDisable();
+  // 尺寸不持久化：每次打开设置都清空、双框可编辑
+  wEl.value = ""; hEl.value = "";
+  wEl.disabled = false; hEl.disabled = false;
 }
-function syncSizeDisable() {
+/* 单侧输入：填一项 → 另一项禁用且留空（只提交填的那一项，等比换算交给后端） */
+function linkSize(e) {
   const wEl = $("targetWidth"), hEl = $("targetHeight");
   if (!wEl || !hEl) return;
-  const wOk = !!(wEl.value.trim() && Number(wEl.value) > 0);
-  const hOk = !!(hEl.value.trim() && Number(hEl.value) > 0);
-  if (wOk) { wEl.disabled = false; hEl.disabled = true; }      // 宽度已填 → 高度锁定（自动换算）
-  else if (hOk) { hEl.disabled = false; wEl.disabled = true; } // 高度已填 → 宽度锁定
-  else { wEl.disabled = false; hEl.disabled = false; }
-}
-function linkSize() {
-  const wEl = $("targetWidth"), hEl = $("targetHeight");
-  if (!wEl || !hEl) return;
-  const wRaw = wEl.value.trim(), hRaw = hEl.value.trim();
-  const wv = parseInt(wRaw, 10), hv = parseInt(hRaw, 10);
-  const wOk = wRaw !== "" && !Number.isNaN(wv) && wv > 0;
-  const hOk = hRaw !== "" && !Number.isNaN(hv) && hv > 0;
-  if (wOk) {
-    if (hOk && refDims && refDims.w && refDims.h) {
-      const h = Math.round(wv * refDims.h / refDims.w);
-      settings.targetWidth = String(wv); settings.targetHeight = String(h); hEl.value = String(h);
-    } else {
-      settings.targetWidth = String(wv); settings.targetHeight = hEl.value.trim();
-    }
-    wEl.disabled = false; hEl.disabled = true;
-  } else if (hOk) {
-    if (refDims && refDims.w && refDims.h) {
-      const w = Math.round(hv * refDims.w / refDims.h);
-      settings.targetHeight = String(hv); settings.targetWidth = String(w); wEl.value = String(w);
-    } else {
-      settings.targetHeight = String(hv); settings.targetWidth = wEl.value.trim();
-    }
-    hEl.disabled = false; wEl.disabled = true;
+  const editedIsH = e && e.target === hEl;
+  const editedEl = editedIsH ? hEl : wEl, otherEl = editedIsH ? wEl : hEl;
+  const v = readDim(editedEl);
+  if (v) {
+    otherEl.value = "";
+    otherEl.disabled = true;
+    if (editedIsH) { settings.targetHeight = String(v); settings.targetWidth = ""; }
+    else { settings.targetWidth = String(v); settings.targetHeight = ""; }
   } else {
-    settings.targetWidth = wRaw; settings.targetHeight = hRaw;
-    wEl.disabled = false; hEl.disabled = false;
+    otherEl.disabled = false;
+    settings.targetWidth = readDim(wEl) ? String(readDim(wEl)) : "";
+    settings.targetHeight = readDim(hEl) ? String(readDim(hEl)) : "";
   }
   saveSettings();
 }
@@ -237,7 +220,8 @@ function closeSettings() { $("settingsSheet").hidden = true; }
 $("settingsBtn").addEventListener("click", openSettings);
 $("settingsClose").addEventListener("click", closeSettings);
 $("settingsBackdrop").addEventListener("click", closeSettings);
-$("settingsHandle").addEventListener("click", closeSettings);
+/* Esc 关闭设置弹窗 */
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("settingsSheet").hidden) closeSettings(); });
 $("suffix").addEventListener("input", e => { settings.suffix = e.target.value; saveSettings(); });
 document.querySelectorAll("input[name=outputMode]").forEach(x => x.addEventListener("change", e => { settings.outputMode = e.target.value; saveSettings(); updateSuffixState(); }));
 
@@ -332,7 +316,7 @@ async function startCompression() {
 function applyResult(result) {
   for (const r of result.files || []) {
     const f = files.get(r.path);
-    if (f) { Object.assign(f, { size: r.orig || f.size, new: r.new, outputPath: r.output_path, error: r.error || null, status: statusOf(r), width: r.width || f.width, height: r.height || f.height }); if (r.width && r.height) setRefDims(r.width, r.height); updateRowEl(r.path); }
+    if (f) { Object.assign(f, { size: r.orig || f.size, new: r.new, outputPath: r.output_path, error: r.error || null, status: statusOf(r), width: r.width || f.width, height: r.height || f.height }); updateRowEl(r.path); }
   }
   $("outbar").hidden = false;
   updateOutPath();

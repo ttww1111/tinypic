@@ -605,6 +605,33 @@ fn embed_webp_exif(orig: &[u8], encoded: &[u8]) -> Result<Vec<u8>, String> {
 // ---------------------------------------------------------------- 工具
 
 fn decode_image(data: &[u8], format: ImageFormat, opts: &Options) -> Result<DecodedImage, String> {
+    let (mut image, source_width, source_height) = decode_image_rgb(data, format)?;
+
+    let scale_percent = resolve_scale_percent(opts, source_width, source_height);
+
+    if scale_percent != 100 {
+        let (width, height) = scaled_dimensions(image.width(), image.height(), scale_percent);
+        image = image.resize_exact(width, height, FilterType::Lanczos3);
+    }
+
+    Ok(DecodedImage {
+        image,
+        source_width,
+        source_height,
+    })
+}
+
+/// 解码为 sRGB DynamicImage（不缩放）。返回 (图, 旋转前宽, 旋转前高)。
+/// 压缩与缩略图共用。CMYK/YCCK JPEG（Illustrator/Photoshop 导出的印刷稿常见）必须走
+/// 「raw CMYK + ICC profile → moxcms 精确转换到 sRGB」路径，
+/// 否则 image 0.25 内部的 zune-jpeg 只做公式换算、输出明显偏色（变亮、变绿、变鲜艳）。
+pub fn decode_image_rgb(data: &[u8], format: ImageFormat) -> Result<(DynamicImage, u32, u32), String> {
+    if format == ImageFormat::Jpeg && is_ink_jpeg(data) {
+        let image = decode_cmyk_dynamic(data)?;
+        let (source_width, source_height) = (image.width(), image.height());
+        return Ok((image, source_width, source_height));
+    }
+
     let reader = ImageReader::with_format(Cursor::new(data), format);
     let mut decoder = reader
         .into_decoder()
@@ -615,8 +642,11 @@ fn decode_image(data: &[u8], format: ImageFormat, opts: &Options) -> Result<Deco
         .unwrap_or(Orientation::NoTransforms);
     let mut image = DynamicImage::from_decoder(decoder).map_err(|e| format!("解码失败: {e}"))?;
     image.apply_orientation(orientation);
+    Ok((image, source_width, source_height))
+}
 
-    let scale_percent = if let Some(target_width) = opts.target_width {
+fn resolve_scale_percent(opts: &Options, source_width: u32, source_height: u32) -> u8 {
+    if let Some(target_width) = opts.target_width {
         if source_width == 0 {
             100
         } else {
@@ -632,18 +662,158 @@ fn decode_image(data: &[u8], format: ImageFormat, opts: &Options) -> Result<Deco
         }
     } else {
         opts.scale_percent
+    }
+}
+
+/// 是否为 Adobe 印刷色 JPEG（CMYK 或 YCCK，Illustrator/Photoshop 导出常见）。
+fn is_ink_jpeg(data: &[u8]) -> bool {
+    let mut decoder = zune_jpeg::JpegDecoder::new(zune_jpeg::zune_core::bytestream::ZCursor::new(data));
+    if decoder.decode_headers().is_err() {
+        return false;
+    }
+    use zune_jpeg::zune_core::colorspace::ColorSpace;
+    matches!(decoder.input_colorspace(), Some(ColorSpace::CMYK | ColorSpace::YCCK))
+}
+
+/// CMYK/YCCK JPEG → sRGB DynamicImage（不缩放）。压缩输出与缩略图共用。
+fn decode_cmyk_dynamic(data: &[u8]) -> Result<DynamicImage, String> {
+    use zune_jpeg::zune_core::bytestream::ZCursor;
+    use zune_jpeg::zune_core::colorspace::ColorSpace;
+    use zune_jpeg::zune_core::options::DecoderOptions;
+
+    let input_space = {
+        let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(data));
+        decoder.decode_headers().map_err(|e| format!("JPEG 解析失败: {e}"))?;
+        decoder.input_colorspace().ok_or("无法确定 JPEG 色彩空间")?
     };
 
-    if scale_percent != 100 {
-        let (width, height) = scaled_dimensions(image.width(), image.height(), scale_percent);
-        image = image.resize_exact(width, height, FilterType::Lanczos3);
+    // zune-jpeg 不支持跨空间转出 CMYK（没有 YCCK→CMYK 分支），
+    // 但 input==output 时是直拷贝 —— 按原始空间拿 raw 4 通道数据
+    let mut decoder = zune_jpeg::JpegDecoder::new_with_options(
+        ZCursor::new(data),
+        DecoderOptions::default().jpeg_set_out_colorspace(input_space),
+    );
+    decoder.decode_headers().map_err(|e| format!("JPEG 解析失败: {e}"))?;
+    let info = decoder.info().ok_or("无法读取 JPEG 信息")?;
+    let source_width = u32::try_from(info.width).map_err(|_| "JPEG 宽度异常".to_string())?;
+    let source_height = u32::try_from(info.height).map_err(|_| "JPEG 高度异常".to_string())?;
+    let icc = decoder.icc_profile();
+    let raw = decoder.decode().map_err(|e| format!("解码失败: {e}"))?;
+
+    // 统一转成「标准约定 CMYK」（0=无墨）：
+    // - YCCK（Adobe transform=2，Illustrator 常见）：先做 YCbCr→RGB 反推 CMY，K 反相直通
+    // - CMYK（Adobe transform=0）：存储即反相值，直接 255-x 反转
+    let standard_cmyk;
+    let inverted;
+    if input_space == ColorSpace::YCCK {
+        standard_cmyk = ycck_to_cmyk(&raw);
+        inverted = false;
+    } else {
+        standard_cmyk = raw;
+        inverted = jpeg_has_adobe_marker(data);
     }
 
-    Ok(DecodedImage {
-        image,
+    // CMYK 印刷稿一般不带 EXIF 方向（Illustrator 导出没有 EXIF Orientation），不做旋转
+    Ok(DynamicImage::ImageRgb8(cmyk_to_srgb(
+        &standard_cmyk,
         source_width,
         source_height,
-    })
+        icc.as_deref(),
+        inverted,
+    )?))
+}
+
+/// YCCK（Adobe 反相域）→ 标准约定 CMYK（0=无墨）。
+/// Y/Cb/Cr 按 JPEG 标准公式反推 RGB，取补得到 C/M/Y；K 反相直通。
+fn ycck_to_cmyk(ycck: &[u8]) -> Vec<u8> {
+    let pixels = ycck.len() / 4;
+    let mut out = vec![0u8; pixels * 4];
+    for index in 0..pixels {
+        let y = ycck[index * 4] as f32;
+        let cb = ycck[index * 4 + 1] as f32 - 128.0;
+        let cr = ycck[index * 4 + 2] as f32 - 128.0;
+        let r = y + 1.402 * cr;
+        let g = y - 0.344_136 * cb - 0.714_136 * cr;
+        let b = y + 1.772 * cb;
+        out[index * 4] = 255 - (255.0 - r).round().clamp(0.0, 255.0) as u8;
+        out[index * 4 + 1] = 255 - (255.0 - g).round().clamp(0.0, 255.0) as u8;
+        out[index * 4 + 2] = 255 - (255.0 - b).round().clamp(0.0, 255.0) as u8;
+        out[index * 4 + 3] = 255 - ycck[index * 4 + 3];
+    }
+    out
+}
+
+/// 扫描 JPEG 段找 APP14 "Adobe" 标记 —— Adobe 工具导出的 CMYK 通道值是反相的（0=满墨）。
+fn jpeg_has_adobe_marker(data: &[u8]) -> bool {
+    if data.len() < 4 || data[0] != 0xFF || data[1] != 0xD8 { return false; }
+    let mut pos = 2;
+    while pos + 4 <= data.len() && data[pos] == 0xFF {
+        let marker = data[pos + 1];
+        if marker == 0xFF { pos += 1; continue; } // 填充字节
+        if marker == 0xD9 || marker == 0xDA { break; } // EOI / SOS：数据流开始，停止扫描
+        if marker == 0xD8 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) { pos += 2; continue; }
+        let seg_len = u16::from_be_bytes([data[pos + 2], data[pos + 3]]) as usize;
+        if seg_len < 2 || pos + 2 + seg_len > data.len() { break; }
+        if marker == 0xEE && pos + 9 <= data.len() && &data[pos + 4..pos + 9] == b"Adobe" { return true; }
+        pos += 2 + seg_len;
+    }
+    false
+}
+
+/// CMYK raw 数据 → sRGB。
+/// 有 ICC profile 时走 moxcms 精确转换（与 TinyPNG 同级效果）；
+/// 无 ICC 时退回 naive 减色公式（R = 255 - C·(1-K)）。
+/// `inverted` = Adobe 反相约定（存储值 0=满墨），先反转成 ICC 标准约定（0=无墨）。
+fn cmyk_to_srgb(cmyk: &[u8], width: u32, height: u32, icc: Option<&[u8]>, inverted: bool) -> Result<image::RgbImage, String> {
+    let pixels = width as usize * height as usize;
+    if pixels == 0 || cmyk.len() < pixels * 4 {
+        return Err("CMYK 数据不完整".to_string());
+    }
+
+    let to_standard = |value: u8| if inverted { 255 - value } else { value };
+
+    if let Some(icc_bytes) = icc {
+        let source_profile = moxcms::ColorProfile::new_from_slice(icc_bytes)
+            .map_err(|error| format!("ICC profile 解析失败: {error}"))?;
+        let srgb = moxcms::ColorProfile::new_srgb();
+        let transform = source_profile
+            .create_transform_8bit(
+                // moxcms 约定：CMYK 数据用 Layout::Rgba 的 4 个通道槽承载（见 profile.rs check_layout）
+                moxcms::Layout::Rgba,
+                &srgb,
+                moxcms::Layout::Rgb,
+                moxcms::TransformOptions::default(),
+            )
+            .map_err(|error| format!("创建色彩转换失败: {error}"))?;
+        let mut rgba_cmyk = vec![0u8; pixels * 4];
+        for index in 0..pixels {
+            let src = &cmyk[index * 4..index * 4 + 4];
+            let dst = &mut rgba_cmyk[index * 4..index * 4 + 4];
+            dst[0] = to_standard(src[0]);
+            dst[1] = to_standard(src[1]);
+            dst[2] = to_standard(src[2]);
+            dst[3] = to_standard(src[3]);
+        }
+        let mut out = vec![0u8; pixels * 3];
+        transform.transform(&rgba_cmyk, &mut out).map_err(|error| format!("CMYK→sRGB 转换失败: {error}"))?;
+        return image::RgbImage::from_raw(width, height, out).ok_or_else(|| "RGB 数据尺寸不符".to_string());
+    }
+
+    // 无 ICC：naive 减色兜底
+    let mut out = vec![0u8; pixels * 3];
+    for index in 0..pixels {
+        let src = &cmyk[index * 4..index * 4 + 4];
+        let k = to_standard(src[3]) as u32;
+        let one_minus_k = 255 - k;
+        let calc = |channel: u8| -> u8 {
+            let value = to_standard(channel) as u32;
+            255 - ((value * one_minus_k + 127) / 255) as u8
+        };
+        out[index * 3] = calc(src[0]);
+        out[index * 3 + 1] = calc(src[1]);
+        out[index * 3 + 2] = calc(src[2]);
+    }
+    image::RgbImage::from_raw(width, height, out).ok_or_else(|| "RGB 数据尺寸不符".to_string())
 }
 
 fn scaled_dimensions(width: u32, height: u32, scale_percent: u8) -> (u32, u32) {

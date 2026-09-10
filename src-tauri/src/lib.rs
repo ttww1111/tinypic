@@ -142,9 +142,18 @@ fn inspect_image(path: &str) -> ImageInfo {
     }
     if !should_make_thumbnail(width, height) { return info; }
 
-    match image::open(path) {
-        Ok(image) => info.thumbnail = make_thumbnail(&image).ok(),
-        Err(error) => info.error = Some(error.to_string()),
+    // 缩略图与压缩输出共用同一条解码路径：CMYK/YCCK JPEG 必须走 ICC 色彩管理，
+    // 否则列表预览会偏色（比原图更绿/更鲜艳），而压缩结果是对的，看起来像"压缩坏了"。
+    let decoded = fs::read(path).map_err(|error| error.to_string()).and_then(|data| {
+        let reader = ImageReader::new(Cursor::new(&data))
+            .with_guessed_format()
+            .map_err(|error| error.to_string())?;
+        let format = reader.format().ok_or("无法识别图片格式")?;
+        engine::decode_image_rgb(&data, format)
+    });
+    match decoded {
+        Ok((image, _, _)) => info.thumbnail = make_thumbnail(&image).ok(),
+        Err(error) => info.error = Some(error),
     }
     info
 }
@@ -260,48 +269,36 @@ async fn compress_batch(window: tauri::WebviewWindow, paths: Vec<String>, settin
         effective_modes[*index] = effective_mode;
         outcomes[*index].effective_mode = Some(effective_mode.to_string());
     }
-    let mut replacements = Vec::new();
-    let mut new_files = Vec::new();
     for (index, _, stage) in compressed.drain(..) {
         let source = PathBuf::from(&paths[index]);
         let effective_mode = effective_modes[index];
         let mut outcome = outcomes[index].clone();
 
-        if CANCEL.load(Ordering::SeqCst) {
-            rollback_delivery(&replacements, &new_files);
-            return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "已取消", true);
-        }
+        if CANCEL.load(Ordering::SeqCst) { return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "已取消", true); }
         if outcome.error.is_some() { continue; }
 
         let destination = if effective_mode == "replace" { source.clone() } else { unique_output_path(&source, &suffix) };
         let delivery = if effective_mode == "replace" {
-            replace_from_stage(&source, &stage, &mut replacements)
+            replace_from_stage(&source, &stage)
         } else {
             fs::copy(&stage, &destination).map(|_| ()).map_err(|error| error.to_string())
         };
 
         match delivery {
-            Ok(()) => {
-                if effective_mode == "new_file" { new_files.push(destination.clone()); }
-                outcome.output_path = Some(destination.to_string_lossy().to_string());
-            }
+            Ok(()) => { outcome.output_path = Some(destination.to_string_lossy().to_string()); }
             Err(error) => {
                 outcome.error = Some(format!("落地失败: {error}"));
                 outcomes[index] = outcome.clone();
                 let _ = window.emit("progress", serde_json::json!({ "phase": "deliver", "done": index + 1, "total": total, "item": outcome }));
-                rollback_delivery(&replacements, &new_files);
-                return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "批处理已回滚", false);
+                // 已成功的保留（partial result），未成功的标 error；不再回滚已替换/已生成的文件
+                return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "批处理已中止", false);
             }
         }
         outcomes[index] = outcome.clone();
         let _ = window.emit("progress", serde_json::json!({ "phase": "deliver", "done": index + 1, "total": total, "item": outcome }));
     }
 
-    if CANCEL.load(Ordering::SeqCst) {
-        rollback_delivery(&replacements, &new_files);
-        return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "已取消", true);
-    }
-    remove_backups(&replacements);
+    if CANCEL.load(Ordering::SeqCst) { return finish_aborted(outcomes, &base, &staging, effective_modes.clone(), "已取消", true); }
     let _ = fs::remove_dir_all(&staging);
     Ok(build_result(outcomes, &base, batch_mode(&effective_modes), false))
 }
@@ -398,16 +395,33 @@ fn unique_path(directory: &Path, stem: &str, extension: &str) -> PathBuf {
     loop { let candidate = directory.join(format!("{stem}_{index}.{extension}")); if !candidate.exists() { return candidate; } index += 1; }
 }
 
-fn replace_from_stage(source: &Path, stage: &Path, replacements: &mut Vec<(PathBuf, PathBuf)>) -> Result<(), String> {
-    let backup_dir = source.parent().unwrap_or_else(|| Path::new(".")).join("tinybak");
-    fs::create_dir_all(&backup_dir).map_err(|error| error.to_string())?;
-    let backup = unique_path(&backup_dir, &source.file_name().unwrap_or_default().to_string_lossy(), "bak");
-    fs::rename(source, &backup).map_err(|error| format!("备份原图失败: {error}"))?;
-    if let Err(error) = fs::copy(stage, source).and_then(|_| fs::remove_file(stage)) {
-        let _ = fs::rename(&backup, source);
-        return Err(error.to_string());
+/// 同卷走 rename（原子），跨卷 fallback 到 copy + remove。
+/// 跨卷时 copy+remove 不原子 —— 但失败时原文件没动过（tmp 在原文件旁，可清掉），
+/// 所以语义上仍可接受，且不会再有「tinybak 空目录」这种残留。
+fn atomic_replace(tmp: &Path, dest: &Path) -> std::io::Result<()> {
+    match fs::rename(tmp, dest) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(tmp, dest)?;
+            fs::remove_file(tmp)?;
+            Ok(())
+        }
     }
-    replacements.push((source.to_path_buf(), backup));
+}
+
+/// replace 模式落地：把 stage 写到 source 旁的临时文件，再 atomic rename 覆盖 source。
+/// 故意**不创建任何原文件备份** —— 用户已经选了「替换原文件」就是确认要覆盖；
+/// 失败时原文件保持在原状态（tmp 文件会被清掉），不存在空目录残留。
+fn replace_from_stage(source: &Path, stage: &Path) -> Result<(), String> {
+    let tmp = unique_output_path(source, ".tmp");
+    if let Err(error) = fs::copy(stage, &tmp) {
+        return Err(format!("写入临时文件失败: {error}"));
+    }
+    if let Err(error) = atomic_replace(&tmp, source) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("替换原文件失败: {error}"));
+    }
+    let _ = fs::remove_file(stage);
     Ok(())
 }
 
@@ -430,37 +444,18 @@ fn replace_output_files(mapping: Vec<ReplacePair>) -> Result<Vec<FileOutcome>, S
             outcomes.push(outcome);
             continue;
         }
-        let backup_dir = source.parent().unwrap_or_else(|| Path::new(".")).join("tinybak");
-        fs::create_dir_all(&backup_dir).map_err(|error| error.to_string())?;
-        let backup = unique_path(&backup_dir, &source.file_name().unwrap_or_default().to_string_lossy(), "bak");
-        if let Err(error) = fs::rename(&source, &backup) {
-            outcome.error = Some(format!("备份原图失败: {error}"));
+        // 直接 atomic rename new_file → source；不再走 tinybak 备份
+        if let Err(error) = atomic_replace(&new_file, &source) {
+            outcome.error = Some(format!("替换原图失败: {error}"));
             outcomes.push(outcome);
             continue;
         }
-        match fs::copy(&new_file, &source) {
-            Ok(_) => {
-                let _ = fs::remove_file(&new_file);
-                let _ = fs::remove_file(&backup);
-                outcome.output_path = Some(pair.path.clone());
-                outcome.kept = false;
-            }
-            Err(error) => {
-                let _ = fs::rename(&backup, &source);
-                outcome.error = Some(format!("替换原图失败: {error}"));
-            }
-        }
+        outcome.output_path = Some(pair.path.clone());
+        outcome.kept = false;
         outcomes.push(outcome);
     }
     Ok(outcomes)
 }
-
-fn rollback_delivery(replacements: &[(PathBuf, PathBuf)], new_files: &[PathBuf]) {
-    for output in new_files { let _ = fs::remove_file(output); }
-    for (source, backup) in replacements.iter().rev() { let _ = fs::remove_file(source); let _ = fs::rename(backup, source); }
-}
-
-fn remove_backups(replacements: &[(PathBuf, PathBuf)]) { for (_, backup) in replacements { let _ = fs::remove_file(backup); } }
 
 fn shared_parent_or_empty(paths: &[String]) -> PathBuf {
     let mut parents = paths.iter().filter_map(|p| Path::new(p).parent().map(|x| x.to_path_buf()));
@@ -550,25 +545,29 @@ mod e2e {
         assert_eq!(cancelled[1].output_path, None);
         assert_eq!(cancelled[1].error.as_deref(), Some("已取消"));
         assert_eq!(cancelled[2].error.as_deref(), Some("压缩失败"));
-        let rolled_back = mark_aborted_outcomes(vec![success, failed], "批处理已回滚");
+        let rolled_back = mark_aborted_outcomes(vec![success, failed], "批处理已中止");
         assert_eq!(rolled_back.len(), 2);
         assert_eq!(rolled_back[0].output_path, None);
-        assert_eq!(rolled_back[0].error.as_deref(), Some("批处理已回滚"));
+        assert_eq!(rolled_back[0].error.as_deref(), Some("批处理已中止"));
     }
 
     #[test]
-    fn replace_rolls_back_original_image() {
-        let directory = std::env::temp_dir().join("tiny-rollback-test");
+    fn replace_overwrites_original_without_backup() {
+        let directory = std::env::temp_dir().join("tiny-replace-test");
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
         let source = directory.join("a.jpg");
         let stage = directory.join("stage.jpg");
         fs::write(&source, b"original").unwrap();
         fs::write(&stage, b"new").unwrap();
-        let mut replacements = Vec::new();
-        replace_from_stage(&source, &stage, &mut replacements).unwrap();
-        rollback_delivery(&replacements, &[]);
-        assert_eq!(fs::read(&source).unwrap(), b"original");
+        replace_from_stage(&source, &stage).unwrap();
+        assert_eq!(fs::read(&source).unwrap(), b"new", "原文件应被 stage 覆盖");
+        // 从源头解决：不应创建任何 tinybak 目录或同名 .bak 备份
+        assert!(!directory.join("tinybak").exists(), "不应创建 tinybak 目录");
+        for entry in fs::read_dir(&directory).unwrap().flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            assert!(!name.ends_with(".bak"), "不应留下 .bak 备份: {name}");
+        }
         let _ = fs::remove_dir_all(directory);
     }
 

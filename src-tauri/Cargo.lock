@@ -4156,11 +4156,12 @@ dependencies = [
 
 [[package]]
 name = "tinypic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "image",
  "imagequant",
+ "moxcms",
  "mozjpeg",
  "oxipng",
  "png 0.17.16",
@@ -4172,6 +4173,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "webp",
+ "zune-jpeg",
 ]
 
 [[package]]

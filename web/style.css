@@ -140,38 +140,42 @@ button,input,select { font:inherit; }
 .icon-btn:hover { color:var(--primary); background:var(--primary-soft); }
 .icon-btn:active { transform:scale(.92); }
 
-/* 调整尺寸：宽度/高度同排网格 */
-.dim-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.dim-cell { display:flex; flex-direction:column; gap:6px; }
-.dim-label { font-size:12px; color:var(--muted); }
-.dim-input { max-width:none; width:100%; }
+/* 调整尺寸：宽 × 高 与「调整尺寸」标题同排（可收缩，不允许撑出横向滚动） */
+.dim-inline { display:flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0; }
+.dim-tag { font-size:12px; color:var(--muted); flex:0 0 auto; }
+.dim-x { font-size:12px; color:#c3c8cf; flex:0 0 auto; }
+.dim-input { flex:1 1 0; min-width:0; width:auto; max-width:none; height:30px; padding:5px 8px; text-align:center; }
 
-/* 保留元数据：三选项同一行 */
-.checks { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px 18px; }
-.check { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
-.check input { width:16px; height:16px; accent-color:var(--primary); cursor:pointer; }
+/* 保留元数据：三选项同一行（不换行） */
+.checks { display:flex; flex-direction:row; flex-wrap:nowrap; gap:14px; }
+.check { display:flex; align-items:center; gap:7px; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+.check input { width:15px; height:15px; accent-color:var(--primary); cursor:pointer; }
 
-/* ===== 底部浮出面板（设置）===== */
-.sheet { position:fixed; z-index:20; inset:0; display:flex; flex-direction:column; justify-content:flex-end; }
+/* ===== 设置：居中弹窗（不铺满界面）===== */
+.sheet { position:fixed; z-index:20; inset:0; display:grid; place-items:center; padding:16px; }
 .sheet[hidden] { display:none; }
 .sheet-backdrop { position:absolute; inset:0; background:rgba(16,24,40,.42); animation:fadeIn .18s ease; }
 .sheet-card {
   position:relative;
-  width:100%; max-height:92vh; overflow:auto;
-  padding:4px 16px 12px;
-  border-radius:18px 18px 0 0;
-  background:var(--bg);
-  box-shadow:none;
-  animation:sheetUp .22s ease;
+  /* 与主界面虚线框同宽（drop: min(460px, 100% - 32px)；此处 100% 已是窗口减 32）。
+     高度取 300：垂直居中后仍能把虚线框完整盖住（默认窗口需 ≥233，最小窗口需 ≥247）。 */
+  width:min(460px,100%); min-height:300px; max-height:100%; overflow:auto;
+  padding:20px 16px 18px;
+  border-radius:var(--radius);
+  background:#fff;
+  box-shadow:0 20px 60px rgba(16,24,40,.22);
+  animation:popIn .18s ease;
 }
+/* 极小窗口兜底：滚动条收窄贴边，不顶破圆角 */
+.sheet-card::-webkit-scrollbar { width:5px; }
+.sheet-card::-webkit-scrollbar-thumb { background:rgba(16,24,40,.18); border-radius:99px; }
+.sheet-card::-webkit-scrollbar-track { background:transparent; }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-@keyframes sheetUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
-.sheet-handle { display:flex; justify-content:center; padding:4px 0 6px; cursor:pointer; }
-.sheet-handle-bar { width:36px; height:4px; border-radius:99px; background:#d7dbe0; }
-.sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:2px; }
+@keyframes popIn { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:none; } }
+.sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
 .sheet-title { font-size:15px; font-weight:700; color:var(--text); }
 .sheet h2 { margin:0; font-size:17px; }
-.sheet-body { padding-bottom:env(safe-area-inset-bottom,0); }
+.sheet-body { padding-bottom:0; }
 
 /* ===== 按钮（仅弹窗内使用） ===== */
 .btn { border:0; border-radius:9px; padding:10px 14px; cursor:pointer; font-weight:600; font-size:13px; transition:.15s; }
@@ -189,24 +193,31 @@ button,input,select { font:inherit; }
 .modal-card.small { width:min(360px,100%); }
 .modal h2 { margin:0; font-size:17px; }
 
-/* 设置项：标题左 + 控件右，单行布局 */
-.field { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 0; border-top:1px solid var(--border); }
+/* 设置项：标题左 + 控件右，单行布局（紧凑） */
+.field { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
 .field:first-of-type { border-top:0; }
 .field-label { flex:0 0 auto; min-width:64px; font-size:13px; font-weight:600; }
 .field-hint { display:none; }
 .field-row { margin-top:0; display:flex; align-items:center; gap:8px; }
-.text-input { width:100%; max-width:200px; padding:8px 10px; border:1px solid var(--border); border-radius:9px; background:#fff; font-size:13px; color:var(--text); }
+.text-input { width:100%; max-width:200px; padding:6px 9px; border:1px solid var(--border); border-radius:9px; background:#fff; font-size:13px; color:var(--text); }
 .text-input:focus { outline:2px solid rgba(47,107,255,.35); border-color:var(--primary); }
 .text-input:disabled { background:#f3f4f6; color:#9aa1ab; cursor:not-allowed; }
 
 /* 分段控件 */
 .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-.seg-opt { position:relative; display:flex; align-items:center; justify-content:center; padding:7px 6px; border:1px solid var(--border); border-radius:10px; font-size:12.5px; color:var(--text); cursor:pointer; background:#fff; transition:.15s; }
+.seg-opt { position:relative; display:flex; align-items:center; justify-content:center; padding:6px 6px; border:1px solid var(--border); border-radius:10px; font-size:12.5px; color:var(--text); cursor:pointer; background:#fff; transition:.15s; }
 .seg-opt input { position:absolute; opacity:0; width:0; height:0; }
 .seg-opt:has(input:checked) { border-color:var(--primary); background:var(--primary-soft); color:var(--primary-dark); font-weight:600; }
 
 .choice-actions { display:flex; gap:10px; margin-top:14px; }
 .choice-actions .btn { flex:1; }
 .choice-remember { display:flex; align-items:center; gap:8px; margin-top:14px; font-size:12.5px; color:var(--muted); cursor:pointer; }
-.close-btn { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:24px; line-height:1; padding:2px 6px; margin-right:-8px; border-radius:8px; }
+/* 关闭按钮：钉在弹窗卡片右上角（相对卡片定位，高于「设置」标题行）
+   —— 它是整个弹窗的关闭，视觉上应凌驾于标题行，而不是与标题齐平 */
+.close-btn {
+  position:absolute; top:8px; right:8px;
+  border:0; background:transparent; color:var(--muted); cursor:pointer;
+  font-size:18px; line-height:1; padding:3px 7px; border-radius:8px;
+}
 .close-btn:hover { color:var(--text); background:rgba(16,24,40,.06); }
+.close-btn:active { transform:scale(.92); }

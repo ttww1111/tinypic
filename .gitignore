@@ -30,3 +30,9 @@ vite.config.js.timestamp-*.mjs
 
 # Cargo registry cache (if present locally)
 .cargo/
+
+# WorkBuddy 项目记忆（含本地记忆/日志，不进仓库）
+.workbuddy/
+
+# 临时生成的对比图
+diff_heatmap.png

@@ -1,6 +1,6 @@
 [package]
 name = "tinypic"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "微图 / TinyPic — 无参数图片压缩"
 rust-version = "1.77"
@@ -24,6 +24,10 @@ oxipng = "10.2"
 mozjpeg = "0.10"
 webp = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# CMYK JPEG（Illustrator/Photoshop 导出的印刷稿）需要拿到 raw CMYK + ICC 才能正确转 sRGB
+zune-jpeg = "0.5"
+# 纯 Rust 色彩管理：按 ICC profile 做 CMYK→sRGB 精确转换（已是 tauri 传递依赖，零额外成本）
+moxcms = "0.8"
 png = "0.17"
 rayon = "1"
 
