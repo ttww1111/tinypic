@@ -22,7 +22,19 @@
       <section id="drop" class="drop" tabindex="0">
         <div class="drop-inner">
           <div class="drop-icon">
-            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 .7.3l3 3a1 1 0 0 1-1.4 1.4L13 6.4V14a1 1 0 1 1-2 0V6.4L9.7 7.7a1 1 0 0 1-1.4-1.4l3-3A1 1 0 0 1 12 3Zm-7 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-16 0 1 1 0 0 1 1-1Z"/></svg>
+            <!-- 云 + 上箭头，描摹自 Tony 提供的 upload.png；描边走主程序 logo 的青系渐变 -->
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <defs>
+                <linearGradient id="tpUpload" x1="0.1" y1="0" x2="0.5" y2="1">
+                  <stop offset="0" stop-color="#06B1CC"/>
+                  <stop offset="1" stop-color="#6FD9E8"/>
+                </linearGradient>
+              </defs>
+              <g fill="none" stroke="url(#tpUpload)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.372 17.771H6.709A4.436 4.436 0 0 1 5.8351 8.9847A6.268 6.268 0 0 1 18.1649 8.9847A4.436 4.436 0 0 1 17.291 17.771H13.628"/>
+                <path d="M10.067 13.945L12 11.34L13.933 13.945M12 11.34V19.44"/>
+              </g>
+            </svg>
           </div>
           <div class="drop-title" id="dropTitle">拖放图片到此处</div>
           <div class="drop-hint">或按 Ctrl+V 粘贴 · 支持 PNG / JPEG / WebP</div>
@@ -87,11 +99,28 @@
               <label class="check"><input type="checkbox" id="keepCreation" /><span>创建日期</span></label>
             </div>
           </div>
+
+          <div class="field">
+            <label class="field-label" for="showFloat">悬浮窗</label>
+            <label class="switch">
+              <input type="checkbox" id="showFloat" />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="field">
+            <label class="field-label">关闭按钮</label>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="closeAction" value="ask" checked /><span>每次询问</span></label>
+              <label class="seg-opt"><input type="radio" name="closeAction" value="tray" /><span>最小化到托盘</span></label>
+              <label class="seg-opt"><input type="radio" name="closeAction" value="exit" /><span>直接退出</span></label>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 调整尺寸：点击底部图标浮出 -->
+    <!-- 保存方式：点击底部图标浮出 -->
     <div id="choiceModal" class="modal" hidden>
       <div class="modal-card small" role="dialog" aria-modal="true" aria-labelledby="choiceTitle">
         <h2 id="choiceTitle">保存方式</h2>
@@ -100,6 +129,19 @@
           <button class="btn ghost" data-choice="new_file">保留新文件</button>
         </div>
         <label class="choice-remember"><input type="checkbox" id="choiceRemember" /> 记住选择，下次不再询问</label>
+      </div>
+    </div>
+
+    <!-- 关闭按钮首次询问：最小化到托盘还是直接退出 -->
+    <div id="closeModal" class="modal" hidden>
+      <div class="modal-card small" role="dialog" aria-modal="true" aria-labelledby="closeTitle">
+        <h2 id="closeTitle">关闭窗口</h2>
+        <p class="modal-desc">最小化到托盘后，双击托盘图标即可重新打开</p>
+        <div class="choice-actions">
+          <button class="btn primary" data-close="tray">最小化到托盘</button>
+          <button class="btn ghost" data-close="exit">直接退出</button>
+        </div>
+        <label class="choice-remember"><input type="checkbox" id="closeRemember" /> 记住我的选择，下次不再询问</label>
       </div>
     </div>
 

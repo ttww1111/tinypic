@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>微图悬浮窗</title>
+    <link rel="stylesheet" href="../float.css" />
+    <style>html{width:308px;height:188px}body{background:#dce1e7}</style>
+  </head>
+  <body data-view="result" class="is-ask">
+    <!-- 常态：胶囊 -->
+    <div class="float-pill" id="pill" role="button" aria-label="拖入图片即可压缩，双击打开主界面">
+      <span class="pill-logo">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M12 3a1 1 0 0 1 .7.3l3 3a1 1 0 0 1-1.4 1.4L13 6.4V14a1 1 0 1 1-2 0V6.4L9.7 7.7a1 1 0 0 1-1.4-1.4l3-3A1 1 0 0 1 12 3Zm-7 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-16 0 1 1 0 0 1 1-1Z"/>
+        </svg>
+      </span>
+      <span class="pill-text" id="pillText">拖拽至此压缩</span>
+    </div>
+
+    <!-- 展开态：同一张卡片承载「投放 / 进行中 / 结果」三种内容，靠 body[data-view] 切换。
+         卡片 280×160，窗口 308×188（四周 14px 透明边留给阴影）。 -->
+    <div class="float-card" id="card" aria-hidden="true">
+      <div class="card-head" id="cardHead">
+        <span class="card-title">
+          <span class="card-logo">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 3a1 1 0 0 1 .7.3l3 3a1 1 0 0 1-1.4 1.4L13 6.4V14a1 1 0 1 1-2 0V6.4L9.7 7.7a1 1 0 0 1-1.4-1.4l3-3A1 1 0 0 1 12 3Zm-7 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-16 0 1 1 0 0 1 1-1Z"/>
+            </svg>
+          </span>
+          <span class="card-name">微图</span>
+        </span>
+        <button class="card-close" id="cardClose" type="button" aria-label="取消 / 关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 1) 拖拽投放 -->
+      <div class="card-body card-drop" id="paneDrop">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="3" />
+          <circle cx="8.8" cy="9.9" r="1.55" />
+          <path d="M4.2 17.6 9 12.6l3.2 3.2 2.3-2.3 4.3 4.1" />
+        </svg>
+        <span class="drop-text" id="dropText">拖拽至此压缩</span>
+        <span class="drop-hint">PNG · JPEG · WebP</span>
+      </div>
+
+      <!-- 2) 压缩进行中 -->
+      <div class="card-body card-work" id="paneWork">
+        <div class="work-row">
+          <span class="work-phase" id="workPhase">压缩中</span>
+          <span class="work-count" id="workCount">0 / 0</span>
+        </div>
+        <div class="work-bar"><span class="work-fill" id="workFill"></span></div>
+        <div class="work-file" id="workFile"></div>
+      </div>
+
+      <!-- 3) 结果（完成 / 失败 / 需要选择保存方式）
+           「完成」的视觉主角是省下的百分比（渐变大数字），徽章只是标题前的小点缀 -->
+      <div class="card-body card-result" id="paneResult">
+        <div class="result-head">
+          <span class="result-mark" aria-hidden="true">
+            <svg class="mark-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5.5 12.6 10 17l8.5-9.6" />
+            </svg>
+            <svg class="mark-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+              <path d="M12 7.4v6.2M12 17.1h.01" />
+            </svg>
+          </span>
+          <span class="result-title" id="resultTitle">3 张压缩完成，怎么保存？</span>
+        </div>
+        <div class="result-hero" id="resultHero" hidden>
+          <span class="hero-label">省</span><span class="hero-num" id="resultHeroNum">0%</span>
+        </div>
+        <div class="result-sub" id="resultSub">12.4 MB → 3.1 MB · 省 75%</div>
+        <div class="result-actions" id="resultActions">
+          <button class="btn btn-safe" data-mode="new_file" type="button">存为新文件</button>
+          <button class="btn btn-risk" data-mode="replace" type="button">替换原文件</button>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

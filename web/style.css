@@ -59,7 +59,7 @@ button,input,select { font:inherit; }
 .drop.busy { pointer-events:none; opacity:.55; }
 .drop-inner { pointer-events:none; padding:16px; }
 .drop-icon { color:var(--muted); margin-bottom:8px; }
-.drop-icon svg { width:30px; height:30px; }
+.drop-icon svg { width:34px; height:34px; }
 .drop-title { font-weight:650; font-size:15px; }
 .drop-hint { margin-top:6px; color:var(--muted); font-size:12px; }
 
@@ -144,7 +144,7 @@ button,input,select { font:inherit; }
 .dim-inline { display:flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0; }
 .dim-tag { font-size:12px; color:var(--muted); flex:0 0 auto; }
 .dim-x { font-size:12px; color:#c3c8cf; flex:0 0 auto; }
-.dim-input { flex:1 1 0; min-width:0; width:auto; max-width:none; height:30px; padding:5px 8px; text-align:center; }
+.dim-input { flex:1 1 0; min-width:0; width:auto; max-width:none; height:28px; padding:5px 8px; text-align:center; }
 
 /* 保留元数据：三选项同一行（不换行） */
 .checks { display:flex; flex-direction:row; flex-wrap:nowrap; gap:14px; }
@@ -158,9 +158,11 @@ button,input,select { font:inherit; }
 .sheet-card {
   position:relative;
   /* 与主界面虚线框同宽（drop: min(460px, 100% - 32px)；此处 100% 已是窗口减 32）。
-     高度取 300：垂直居中后仍能把虚线框完整盖住（默认窗口需 ≥233，最小窗口需 ≥247）。 */
+     高度取 300：垂直居中后仍能把虚线框完整盖住（默认窗口需 ≥233，最小窗口需 ≥247）。
+     2026-09-18 加了「悬浮窗」「关闭按钮」两行设置，为守住「默认窗口 520×360 下不出现
+     滚动条」，把内边距和行距整体收紧了一档（内容约 315，可用 328）。 */
   width:min(460px,100%); min-height:300px; max-height:100%; overflow:auto;
-  padding:20px 16px 18px;
+  padding:14px 16px 12px;
   border-radius:var(--radius);
   background:#fff;
   box-shadow:0 20px 60px rgba(16,24,40,.22);
@@ -172,8 +174,8 @@ button,input,select { font:inherit; }
 .sheet-card::-webkit-scrollbar-track { background:transparent; }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 @keyframes popIn { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:none; } }
-.sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
-.sheet-title { font-size:15px; font-weight:700; color:var(--text); }
+.sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
+.sheet-title { font-size:14px; font-weight:700; color:var(--text); }
 .sheet h2 { margin:0; font-size:17px; }
 .sheet-body { padding-bottom:0; }
 
@@ -192,22 +194,33 @@ button,input,select { font:inherit; }
 .modal-card { width:min(360px,100%); padding:18px 20px; border-radius:16px; background:#fff; box-shadow:0 20px 60px rgba(16,24,40,.22); }
 .modal-card.small { width:min(360px,100%); }
 .modal h2 { margin:0; font-size:17px; }
+/* 关闭询问弹窗里的那句说明 */
+.modal-desc { margin:10px 0 0; color:var(--muted); font-size:12.5px; line-height:1.5; }
 
 /* 设置项：标题左 + 控件右，单行布局（紧凑） */
-.field { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
+.field { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--border); }
 .field:first-of-type { border-top:0; }
 .field-label { flex:0 0 auto; min-width:64px; font-size:13px; font-weight:600; }
 .field-hint { display:none; }
 .field-row { margin-top:0; display:flex; align-items:center; gap:8px; }
-.text-input { width:100%; max-width:200px; padding:6px 9px; border:1px solid var(--border); border-radius:9px; background:#fff; font-size:13px; color:var(--text); }
+.text-input { width:100%; max-width:200px; padding:5px 9px; border:1px solid var(--border); border-radius:9px; background:#fff; font-size:13px; color:var(--text); }
 .text-input:focus { outline:2px solid rgba(47,107,255,.35); border-color:var(--primary); }
 .text-input:disabled { background:#f3f4f6; color:#9aa1ab; cursor:not-allowed; }
 
 /* 分段控件 */
 .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-.seg-opt { position:relative; display:flex; align-items:center; justify-content:center; padding:6px 6px; border:1px solid var(--border); border-radius:10px; font-size:12.5px; color:var(--text); cursor:pointer; background:#fff; transition:.15s; }
+.seg-opt { position:relative; display:flex; align-items:center; justify-content:center; padding:5px 6px; border:1px solid var(--border); border-radius:10px; font-size:12.5px; color:var(--text); cursor:pointer; background:#fff; transition:.15s; }
 .seg-opt input { position:absolute; opacity:0; width:0; height:0; }
 .seg-opt:has(input:checked) { border-color:var(--primary); background:var(--primary-soft); color:var(--primary-dark); font-weight:600; }
+
+/* 开关（悬浮窗）：滑动块 + 轨道，用 checkbox 驱动 */
+.switch { position:relative; display:inline-flex; align-items:center; flex:0 0 auto; cursor:pointer; }
+.switch input { position:absolute; opacity:0; width:0; height:0; }
+.switch-track { position:relative; width:40px; height:22px; border-radius:99px; background:var(--border-strong); transition:background-color .18s ease; }
+.switch-track::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.2); transition:transform .18s ease; }
+.switch input:checked + .switch-track { background:var(--primary); }
+.switch input:checked + .switch-track::after { transform:translateX(18px); }
+.switch input:focus-visible + .switch-track { outline:2px solid rgba(47,107,255,.35); }
 
 .choice-actions { display:flex; gap:10px; margin-top:14px; }
 .choice-actions .btn { flex:1; }

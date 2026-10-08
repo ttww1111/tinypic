@@ -1,0 +1,306 @@
+/* 悬浮窗样式。
+   品牌色取自应用图标本身（src-tauri/icons/128x128.png 实测取样）：
+   山体青 #03bdd2、天空 #ddf2f7、太阳橙 #fea515、黑描边。胶囊圆标、进度条、
+   按钮用青色系；「省 X%」大数字用太阳橙，正好是图标里青山 + 橙日的组合。
+   灰色统一带一点青调（--line / --text / --muted），避免「灰底配青点」的割裂感。
+
+   2026-09 视觉翻版的几条决定：
+   - 常驻桌面的小组件要「轻而精致」：白瓷小卡 + 一颗宝石青圆标，
+     阴影加深到能从桌面上浮起来，但不做玻璃拟态（透明窗口上没有可模糊的内容层）。
+   - 结果态的视觉主角是「省 X%」大数字 —— 压缩率是产品核心价值，
+     徽章降级为标题前的小点缀。
+   - 投放区用四角括号而不是虚线圈：四角是「瞄准框」语义，中间留给图标和文案呼吸。
+   - 内容统一左对齐，垂直居中：窄卡上居中排版容易失衡。
+
+   窗口是透明的，四周 14px 留白专门给阴影；所以所有 box-shadow 的
+   「垂直偏移 + 模糊半径」合计必须 ≤14px，否则阴影会在窗口边界被硬切出一条边。 */
+
+:root {
+  /* 品牌青阶（源自图标的山体 #03bdd2） */
+  --brand-50:#e9f9fb;
+  --brand-100:#d2f2f6;
+  --brand-200:#a8e6ee;
+  --brand-300:#74d8e4;
+  --brand-400:#2fc6d8;
+  --brand-500:#03bdd2;
+  --brand-600:#0699ae;
+  --brand-700:#07798c;
+  --brand-grad:linear-gradient(135deg,#2cc9db 0%,#03bdd2 55%,#0693a9 100%);
+  /* 太阳橙（图标里的 sun #fea515），只给结果大数字用 */
+  --sun:#fea515;
+  --sun-grad:linear-gradient(135deg,#ffb837 0%,#f99306 100%);
+
+  /* 中性色也偏青，整体才像一套 */
+  --line:#dfe9ec;
+  --line-2:#bfd6dc;
+  --surface:#fff;
+  --surface-2:#f6fafb;
+  --text:#132529;
+  --text-2:#3f565c;
+  --muted:#5d757c;
+
+  --danger:#d9453f;
+  --danger-line:#f0cbc9;
+  --danger-soft:#fdf3f2;
+
+  --ease:cubic-bezier(.2,.9,.3,1);
+}
+* { box-sizing:border-box; -webkit-user-drag:none; }
+[hidden] { display:none !important; }
+html, body { height:100%; margin:0; background:transparent; overflow:hidden; }
+body {
+  display:flex; align-items:center; justify-content:center;
+  padding:14px;
+  font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--text);
+  user-select:none; -webkit-user-select:none; cursor:default;
+}
+
+/* ===== 视图切换：同一张卡承载投放 / 进行中 / 结果 =====
+   idle 显示胶囊，其余三种都显示卡片；卡片内部再按 data-view 换内容。
+   注意：胶囊/卡片本体规则里不能再写 display，否则会盖掉这里的隐藏。 */
+.float-pill, .float-card { display:none; }
+body[data-view="idle"] .float-pill { display:flex; }
+body:not([data-view="idle"]) .float-card { display:flex; }
+.card-body { display:none; }
+body[data-view="drop"] .card-drop { display:flex; }
+body[data-view="work"] .card-work { display:flex; }
+body[data-view="result"] .card-result { display:flex; }
+
+/* ===== 胶囊本体 =====
+   display 由上面的视图切换规则给，这里只管外观。 */
+.float-pill {
+  position:relative;
+  width:100%; height:40px;
+  align-items:center; gap:10px;
+  padding:0 15px 0 6px;
+  border-radius:99px;
+  background:var(--surface);
+  color:var(--brand-700);
+  box-shadow:
+    0 0 0 1px rgba(7,121,140,.09),
+    0 1px 2px rgba(9,42,48,.07),
+    0 4px 10px rgba(9,42,48,.16);
+  cursor:grab;
+  transition:box-shadow .18s ease, transform .18s ease;
+  will-change:transform;
+}
+
+/* 图标本体已自带 logo 青渐变，这里只留一个定位槽 —— 不再叠渐变圆底，
+   否则「渐变图标压渐变底」两层青色互相打架。 */
+.pill-logo {
+  flex:0 0 28px; width:28px; height:28px;
+  display:grid; place-items:center;
+}
+.pill-logo svg { display:block; width:22px; height:22px; }
+
+.pill-text {
+  flex:1 1 auto; min-width:0;
+  font-size:13.5px; font-weight:600; letter-spacing:.02em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+.float-pill:hover {
+  transform:translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(7,121,140,.12),
+    0 2px 3px rgba(9,42,48,.07),
+    0 5px 9px rgba(9,42,48,.2);
+}
+.float-pill:active { transform:translateY(0) scale(.98); cursor:grabbing; }
+.float-pill.dragging { cursor:grabbing; }
+.float-pill.busy { cursor:progress; }
+.float-pill.busy .pill-logo { animation:logo-pulse 1.4s ease-in-out infinite; }
+
+/* 出现动效：由 JS 在窗口显示后挂 .enter，避免窗口还没显示就播完 */
+.float-pill.enter { animation:pill-in .26s var(--ease); }
+
+@keyframes pill-in { from { opacity:0; transform:translateY(6px) scale(.94); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes logo-pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+
+/* ===== 卡片（280×160）===== */
+.float-card {
+  flex-direction:column;
+  width:100%; height:100%;
+  padding:11px 14px 13px;
+  border-radius:16px;
+  background:var(--surface);
+  box-shadow:
+    0 0 0 1px rgba(7,121,140,.08),
+    0 1px 3px rgba(9,42,48,.06),
+    0 4px 10px rgba(9,42,48,.13);
+  cursor:default;
+  animation:card-in .18s var(--ease);
+}
+.card-head {
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:space-between;
+  height:26px;
+  cursor:grab;
+}
+.card-title {
+  display:flex; align-items:center; gap:7px;
+  font-size:13px; font-weight:600; color:var(--text-2);
+  letter-spacing:.03em;
+}
+.card-logo {
+  flex:0 0 18px; width:18px; height:18px;
+  display:grid; place-items:center;
+}
+.card-logo svg { display:block; width:15px; height:15px; }
+
+.card-close {
+  width:24px; height:24px;
+  display:grid; place-items:center;
+  padding:0; border:0; border-radius:8px;
+  background:transparent; color:var(--muted);
+  cursor:pointer;
+  transition:background-color .12s ease, color .12s ease;
+}
+.card-close:hover { background:var(--brand-100); color:var(--brand-700); }
+.card-close svg { display:block; width:14px; height:14px; }
+
+/* 三个内容区共用的定位：撑满 head 以下的剩余空间 */
+.card-drop, .card-work, .card-result { flex:1 1 auto; min-height:0; margin-top:9px; }
+
+/* ---- 1) 投放区：四角「瞄准框」 ----
+   四角括号用 8 段定位渐变画（每角横竖两条 2px 线），不用 border 是因为
+   虚线圈是「表单感」，四角是「投放目标感」。角线内缩 11px，避开 12px 圆角的弧。 */
+.card-drop {
+  --corner: var(--line-2);
+  flex-direction:column; align-items:center; justify-content:center; gap:7px;
+  border-radius:12px;
+  background-color:var(--surface-2);
+  background-image:
+    linear-gradient(var(--corner),var(--corner)), linear-gradient(var(--corner),var(--corner)),
+    linear-gradient(var(--corner),var(--corner)), linear-gradient(var(--corner),var(--corner)),
+    linear-gradient(var(--corner),var(--corner)), linear-gradient(var(--corner),var(--corner)),
+    linear-gradient(var(--corner),var(--corner)), linear-gradient(var(--corner),var(--corner));
+  background-repeat:no-repeat;
+  background-size:14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px;
+  background-position:
+    left 11px top 11px, left 11px top 11px,
+    right 11px top 11px, right 11px top 11px,
+    left 11px bottom 11px, left 11px bottom 11px,
+    right 11px bottom 11px, right 11px bottom 11px;
+  /* 图标与文案走品牌主青（= 瞄准框的同一色系）：原来吃 --muted 的暗灰青，
+     压在浅灰底上发闷。四角框是这条青的淡阶，二者自然成套。 */
+  color:var(--brand-500);
+  transition:background-color .16s ease, color .16s ease;
+}
+.drop-icon { display:block; width:32px; height:32px; transition:transform .16s var(--ease); }
+.drop-text { font-size:13px; font-weight:600; }
+.drop-hint { font-size:11px; letter-spacing:.06em; color:var(--brand-500); opacity:.72; }
+/* 拖拽真正进入命中范围：四角点亮、整块染绿、图标轻微放大 */
+body.drag-active .card-drop {
+  --corner: var(--brand-400);
+  background-color:var(--brand-50);
+  color:var(--brand-700);
+}
+body.drag-active .card-drop .drop-icon { transform:scale(1.08); }
+body.drag-active .card-drop .drop-hint { color:var(--brand-600); opacity:.9; }
+
+/* ---- 2) 进行中 ---- */
+.card-work { flex-direction:column; justify-content:center; gap:9px; }
+.work-row { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.work-phase { font-size:13px; font-weight:600; color:var(--brand-600); }
+.work-count { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.work-bar { height:8px; border-radius:99px; background:#e2eff2; overflow:hidden; }
+.work-fill {
+  position:relative; display:block; height:100%; width:0; border-radius:99px;
+  background-image:var(--brand-grad);
+  transition:width .22s ease;
+}
+/* 流光：细斜条在填充上匀速滑过，8px 的细条也有「正在动」的生命感 */
+.work-fill::after {
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  background:repeating-linear-gradient(-55deg, rgba(255,255,255,.22) 0 6px, transparent 6px 12px);
+  animation:work-sheen .8s linear infinite;
+}
+@keyframes work-sheen { from { transform:translateX(0); } to { transform:translateX(12px); } }
+.work-file {
+  font-size:12px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  min-height:17px;
+}
+
+/* ---- 3) 结果：整块居中 ---- */
+.card-result {
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:5px;
+  text-align:center;
+}
+.result-head {
+  display:flex; align-items:center; gap:8px;
+  min-width:0;
+}
+.result-mark {
+  flex:0 0 18px; width:18px; height:18px;
+  display:grid; place-items:center;
+  border-radius:50%;
+  background-image:var(--brand-grad); color:#fff;
+  animation:mark-pop .3s var(--ease);
+}
+.result-mark svg { display:block; width:10px; height:10px; }
+.result-mark .mark-err { display:none; }
+/* 失败态：实心大红圆太冲，降为浅红底 + 红描边的软徽章 */
+body.is-err .result-mark {
+  background-image:none; background-color:var(--danger-soft); color:var(--danger);
+  box-shadow:inset 0 0 0 1px var(--danger-line);
+}
+body.is-err .result-mark .mark-ok { display:none; }
+body.is-err .result-mark .mark-err { display:block; }
+
+.result-title { font-size:13px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* 「省 X%」是结果卡的视觉主角 */
+.result-hero {
+  display:flex; align-items:baseline; gap:6px;
+  margin:1px 0 0 -1px;
+  animation:hero-in .32s var(--ease);
+}
+.hero-label { font-size:13px; font-weight:600; color:var(--brand-700); }
+.hero-num {
+  font-size:27px; font-weight:800; letter-spacing:-.01em; line-height:1;
+  font-variant-numeric:tabular-nums;
+  background-image:var(--sun-grad);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:#f08c00;
+}
+.result-sub {
+  font-size:12px; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+  max-width:100%;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  overflow:hidden;
+}
+
+/* 「需要选择保存方式」时不摆数字：两个按钮自己把意思说清了 */
+body.is-ask .result-hero { display:none; }
+.result-actions { display:flex; gap:8px; width:100%; margin-top:5px; }
+.btn {
+  flex:1 1 0;
+  height:32px;
+  padding:0 10px;
+  border-radius:10px; border:1px solid transparent;
+  font-size:12.5px; font-weight:600;
+  cursor:pointer;
+  transition:background-color .14s ease, border-color .14s ease, color .14s ease;
+}
+/* 安全项做主按钮、危险项做描边弱化 —— 顺手点到的应该是不可逆那个的反面 */
+.btn-safe {
+  background-image:linear-gradient(180deg,#10b4ca 0%,#0699ae 100%);
+  color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28), 0 1px 2px rgba(6,73,84,.25);
+}
+.btn-safe:hover { background-image:linear-gradient(180deg,#0aa5ba 0%,#05879b 100%); }
+.btn-risk { background-color:var(--surface); color:var(--danger); border-color:var(--danger-line); }
+.btn-risk:hover { background-color:var(--danger-soft); border-color:var(--danger); }
+
+@keyframes card-in { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+@keyframes mark-pop { from { opacity:0; transform:scale(.6); } to { opacity:1; transform:scale(1); } }
+@keyframes hero-in { from { opacity:0; transform:translateY(3px) scale(.9); } to { opacity:1; transform:none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .float-pill, .float-pill *, .float-card, .float-card * { animation:none !important; transition:none !important; }
+}

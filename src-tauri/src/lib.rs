@@ -1,3 +1,4 @@
+mod desktop;
 mod engine;
 
 use base64::Engine as _;
@@ -230,6 +231,9 @@ fn is_clip_temp(path: &Path) -> bool { path.starts_with(clip_temp_root()) }
 
 #[tauri::command]
 async fn compress_batch(window: tauri::WebviewWindow, paths: Vec<String>, settings: Option<CompressSettings>) -> Result<BatchResult, String> {
+    // 主窗和悬浮窗共用全局取消标志 CANCEL，不能并行跑：第二个进来的任务直接拒绝，
+    // 否则一边的「取消」会把另一边的任务也打断。RAII 保证任何返回路径都会释放。
+    let _busy = desktop::BusyGuard::acquire()?;
     CANCEL.store(false, Ordering::SeqCst);
     let settings = settings.unwrap_or_default();
     if !(1..=100).contains(&settings.scale_percent) { return Err("缩放百分比必须在 1 到 100 之间".to_string()); }
@@ -471,10 +475,39 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![compress_batch, file_sizes, image_infos, save_clipboard_image, cleanup_temp, cancel_compress, replace_output_files])
+        .invoke_handler(tauri::generate_handler![
+            compress_batch,
+            file_sizes,
+            image_infos,
+            save_clipboard_image,
+            cleanup_temp,
+            cancel_compress,
+            replace_output_files,
+            desktop::sync_settings,
+            desktop::get_settings,
+            desktop::set_float_visible,
+            desktop::reveal_float,
+            desktop::show_main_window,
+            desktop::resolve_close,
+            desktop::quit_app,
+            desktop::float_context_menu,
+            desktop::float_card_mode,
+            desktop::float_menu_action,
+            desktop::close_float_menu
+        ])
+        .setup(|app| {
+            desktop::setup(app.handle());
+            Ok(())
+        })
+        .on_window_event(|window, event| desktop::on_window_event(window, event))
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
-    app.run(|_, event| if matches!(event, tauri::RunEvent::Exit { .. }) { let _ = cleanup_temp(); });
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit { .. }) {
+            desktop::on_exit(app_handle);
+            let _ = cleanup_temp();
+        }
+    });
 }
 
 #[cfg(test)]

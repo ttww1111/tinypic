@@ -15,7 +15,7 @@ const files = new Map();
 // 设置存储：键名永远停在 v1，绝不 bump 版本号（2026-09-10 Tony 反馈：v1→v2 整桶替换
 // 让老用户的所有设置都丢了，以后加新字段只在 defaults 里扩展，靠 loadSettings 合并）
 const SETTINGS_KEY = "tiny.settings.v1";
-const defaults = { outputMode: "ask", suffix: "_tiny", targetWidth: "", targetHeight: "", keepCopyright: false, keepLocation: false, keepCreation: false };
+const defaults = { outputMode: "ask", suffix: "_tiny", targetWidth: "", targetHeight: "", keepCopyright: false, keepLocation: false, keepCreation: false, showFloat: false, closeAction: "ask" };
 let settings = loadSettings(), running = false;
 
 function loadSettings() {
@@ -23,10 +23,15 @@ function loadSettings() {
   try { s = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { s = { ...defaults }; }
   return s;
 }
+/* 设置只由主窗保存，顺手往 Rust 侧推一份镜像：悬浮窗要读设置，
+   但不依赖两个 webview 共享 localStorage（跨窗口存储不是保证行为）。
+   推的是内存里的完整设置（含不持久化的宽/高），这样悬浮窗能用上当前的尺寸设置。 */
+function pushSettings() { invoke("sync_settings", { settings }).catch(() => {}); }
 function saveSettings() {
   // 宽/高每次重新打开都重置（不同图片尺寸不同），不持久化
   const { targetWidth, targetHeight, ...rest } = settings;
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
+  pushSettings();
 }
 function humanSize(n) { const u = ["B", "KB", "MB", "GB"]; let v = n || 0, i = 0; while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; } return i ? `${v.toFixed(1)} ${u[i]}` : `${Math.round(v)} B`; }
 function showNotice(text) { noticeEl.textContent = text; clearTimeout(showNotice.timer); showNotice.timer = setTimeout(() => noticeEl.textContent = "", 3500); }
@@ -205,8 +210,11 @@ function syncSettingsUI() {
   $("keepLocation").checked = settings.keepLocation;
   $("keepCreation").checked = settings.keepCreation;
   $("suffix").value = settings.suffix;
+  $("showFloat").checked = !!settings.showFloat;
   const mode = document.querySelector(`input[name=outputMode][value="${settings.outputMode}"]`);
   if (mode) mode.checked = true;
+  const closeMode = document.querySelector(`input[name=closeAction][value="${settings.closeAction}"]`);
+  if (closeMode) closeMode.checked = true;
   syncSizeUI();
   updateSuffixState();
 }
@@ -220,10 +228,22 @@ function closeSettings() { $("settingsSheet").hidden = true; }
 $("settingsBtn").addEventListener("click", openSettings);
 $("settingsClose").addEventListener("click", closeSettings);
 $("settingsBackdrop").addEventListener("click", closeSettings);
-/* Esc 关闭设置弹窗 */
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("settingsSheet").hidden) closeSettings(); });
+/* Esc：设置弹窗与关闭询问都直接收起来（关闭询问收起 = 取消关闭） */
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!$("settingsSheet").hidden) closeSettings();
+  if (!$("closeModal").hidden) $("closeModal").hidden = true;
+});
 $("suffix").addEventListener("input", e => { settings.suffix = e.target.value; saveSettings(); });
 document.querySelectorAll("input[name=outputMode]").forEach(x => x.addEventListener("change", e => { settings.outputMode = e.target.value; saveSettings(); updateSuffixState(); }));
+document.querySelectorAll("input[name=closeAction]").forEach(x => x.addEventListener("change", e => { settings.closeAction = e.target.value; saveSettings(); }));
+
+/* 悬浮窗开关：开 → Rust 懒创建并显示；关 → 隐藏（窗口留着复用） */
+$("showFloat").addEventListener("change", e => {
+  settings.showFloat = e.target.checked;
+  saveSettings();
+  invoke("set_float_visible", { visible: settings.showFloat }).catch(err => showNotice(`悬浮窗切换失败：${err}`));
+});
 
 /* 调整尺寸已并入设置页：宽/高同排，设一项自动按参考图等比换算另一项 */
 $("targetWidth").addEventListener("input", linkSize);
@@ -373,6 +393,70 @@ function clearList() {
   $("outbar").hidden = true;
 }
 $("clearBtn").addEventListener("click", clearList);
+
+/* ===== 悬浮窗联动 ===== */
+
+/* 悬浮窗自己跑完的压缩（存为新文件）：把结果并进列表，否则双击回主界面看不到痕迹 */
+listen("float-result", event => {
+  const result = event.payload;
+  if (!result?.files?.length) return;
+  if (running) { showNotice("悬浮窗刚完成一批压缩，主界面稍后再添加"); return; }
+  files.clear();
+  for (const item of result.files) {
+    files.set(item.path, {
+      path: item.path, name: item.name, size: item.orig, new: item.new,
+      outputPath: item.output_path, error: item.error || null, status: statusOf(item),
+      width: item.width, height: item.height, thumbnail: null,
+    });
+  }
+  render();
+  $("outbar").hidden = false;
+  updateOutPath();
+  hydrate([...files.keys()]);
+}).catch(() => {});
+
+/* 悬浮窗右键菜单里选了「隐藏悬浮窗」：设置里的开关要跟着关掉 */
+listen("float-hidden", () => {
+  settings.showFloat = false;
+  saveSettings();
+  syncSettingsUI();
+}).catch(() => {});
+
+/* 关闭按钮：Rust 侧拦下关闭请求后发事件过来弹提示（首次询问），
+   选完由 resolve_close 落地（最小化到托盘 / 直接退出） */
+listen("close-requested", () => {
+  $("closeRemember").checked = false;
+  $("closeModal").hidden = false;
+}).catch(() => {});
+function chooseClose(action) {
+  const remember = $("closeRemember").checked;
+  $("closeModal").hidden = true;
+  if (remember) { settings.closeAction = action; saveSettings(); }
+  invoke("resolve_close", { action, persist: remember }).catch(() => {});
+}
+document.querySelectorAll("#closeModal [data-close]").forEach(button => {
+  button.addEventListener("click", () => chooseClose(button.dataset.close));
+});
+
 render();
 syncSizeUI();
+pushSettings();
+/* 开关状态跟着设置走：程序启动时按设置把悬浮窗补上（Rust 侧不自己猜）。
+   冷启动时主窗与浮窗是两个独立 webview，谁先就绪不确定；Rust 侧要等浮窗页面 ready 才会真正
+   显示，所以这里把同一个幂等请求再补两次，覆盖「那一次调用刚好没成/落在就绪之前」的情况。
+   旧版只喊一次，偶尔就出现「设置里明明勾了显示悬浮窗，启动后却没出现」。 */
+function syncFloatVisibility() {
+  const visible = !!settings.showFloat;
+  invoke("set_float_visible", { visible }).catch(() => {});
+  if (!visible) return;
+  setTimeout(() => invoke("set_float_visible", { visible: true }).catch(() => {}), 700);
+  setTimeout(() => invoke("set_float_visible", { visible: true }).catch(() => {}), 2000);
+}
+syncFloatVisibility();
+
+/* 主窗**不需要**「等加载完再出现」：位置由 `tauri.conf.json` 的 `center: true` 在创建时
+   一次定好，首帧之前的空白由窗口 `backgroundColor`（= 前端的 `--bg`）顶掉。
+   ⚠️ 这里**不要**再加任何移动窗口的逻辑 —— 上一版是「先停在屏幕外、加载完再挪回中央」，
+   用户看到的就是「窗口先出现在一个位置，加载完又跳到另一个位置」。 */
+
 (async () => { try { const v = await getVersion(); const tag = $("versionTag"); if (tag) tag.textContent = "v" + v; } catch (e) {} })();

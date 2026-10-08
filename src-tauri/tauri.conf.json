@@ -12,13 +12,51 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "微图",
+        "center": true,
         "width": 520,
         "height": 360,
         "minWidth": 480,
         "minHeight": 320,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "visible": true,
+        "backgroundColor": "#f5f6f8"
+      },
+      {
+        "label": "float",
+        "url": "float.html",
+        "title": "微图悬浮窗",
+        "width": 196,
+        "height": 68,
+        "x": -10000,
+        "y": -10000,
+        "visible": true,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "focus": false,
+        "dragDropEnabled": true
+      },
+      {
+        "label": "menu",
+        "url": "menu.html",
+        "title": "微图菜单",
+        "width": 208,
+        "height": 164,
+        "x": -10000,
+        "y": -10000,
+        "visible": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "focus": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

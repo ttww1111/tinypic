@@ -1,0 +1,64 @@
+/* 悬浮窗右键菜单：独立小窗，白卡片 + 线性图标（参考百度网盘那个菜单）。
+   窗口 208×164，菜单本体 184×140，四周 12px 透明边专门留给阴影 ——
+   所以所有 box-shadow 的「垂直偏移 + 模糊半径」都必须 ≤12px，
+   否则阴影会在窗口边界被硬切出一条边。改这里要同步 tauri.conf.json 的窗口尺寸。 */
+:root {
+  --ink:#1f2329;
+  --danger:#e0413e;
+  --hover:#f2f4f7;
+}
+* { box-sizing:border-box; -webkit-user-drag:none; }
+html, body { height:100%; margin:0; background:transparent; overflow:hidden; }
+body {
+  display:grid; place-items:center;
+  padding:12px;
+  font:13.5px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink);
+  user-select:none; -webkit-user-select:none; cursor:default;
+}
+
+.menu {
+  width:100%;
+  padding:6px;
+  border-radius:14px;
+  background:#fff;
+  box-shadow:0 2px 6px rgba(16,24,40,.10), 0 4px 8px rgba(16,24,40,.12);
+  transform-origin:top left;
+  will-change:transform, opacity;
+}
+
+.menu-item {
+  display:flex; align-items:center; gap:10px;
+  width:100%; height:38px;
+  padding:0 10px;
+  border:0; border-radius:9px;
+  background:transparent;
+  color:inherit;
+  font:inherit; text-align:left;
+  cursor:pointer;
+  transition:background-color .12s ease, color .12s ease;
+}
+.menu-item:hover { background:var(--hover); }
+.menu-item:active { background:#e8ebf0; }
+.menu-item.is-danger { color:var(--danger); }
+.menu-item.is-danger:hover { background:#fdeceb; }
+
+.menu-icon { flex:0 0 18px; width:18px; height:18px; display:grid; place-items:center; }
+.menu-icon svg { display:block; width:18px; height:18px; }
+.menu-text {
+  flex:1 1 auto; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+.menu-sep { height:1px; margin:4px 8px; background:#eceff3; }
+
+/* 弹出动效：菜单贴在光标右下方，锚点就在左上角，所以从那里展开 */
+.menu.enter { animation:menu-in .13s ease-out; }
+@keyframes menu-in {
+  from { opacity:0; transform:scale(.94) translateY(-3px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu, .menu * { animation:none !important; transition:none !important; }
+}
